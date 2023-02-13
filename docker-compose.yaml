@@ -1,0 +1,99 @@
+version: '3.8'
+services:
+  # mysql container
+  db:
+    container_name: mysql_container
+    platform: linux/x86_64
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - '3306:3306'
+    volumes:
+      - ./docker/mysql:/var/lib/mysql
+    env_file:
+      - .env
+    networks:
+      - my-network
+
+  # phpmyadmin container
+  phpmyadmin:
+    container_name: php_my_admin_container
+    platform: linux/x86_64
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    ports:
+      - '8200:80'
+    environment:
+      PMA_HOST: db
+    depends_on:
+      - db
+    env_file:
+      - .env
+    networks:
+      - my-network
+
+  # php container
+  php:
+    container_name: php_container
+    platform: linux/x86_64
+    build:
+      context: ./docker/php
+      args:
+        TIMEZONE: ${TIMEZONE}
+    restart: always
+    ports:
+      - '8100:80'
+    volumes:
+      - ./backend:/var/www/symfony/
+    depends_on:
+      - db
+    env_file:
+      - .env
+    networks:
+      - my-network
+
+  # mailer container
+  mailer:
+    container_name: mailer_container
+    platform: linux/x86_64
+    image: schickling/mailcatcher
+    ports:
+      - '1025:25'
+    networks:
+      - my-network
+
+  # nginx container
+  nginx:
+    container_name: nginx_container
+    platform: linux/x86_64
+    build:
+      context: ./docker/nginx
+    environment:
+      NGINX_HTTP_PORT: ${NGINX_HTTP_PORT}
+      NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT}
+      NGINX_BACKEND_DOMAIN: ${NGINX_BACKEND_DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./docker/nginx/templates:/etc/nginx/templates
+      - ./backend:/var/www/symfony
+    depends_on:
+      - db
+      - mailer
+      - php
+    env_file:
+      - .env
+    networks:
+      - my-network
+
+# custom network
+networks:
+  my-network:
+    name: my-network
+    driver: bridge
